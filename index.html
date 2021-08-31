@@ -1,0 +1,220 @@
+<html>
+  <head>
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.14/Tone.js"
+      integrity="sha512-0R3O2W4t+1h8Jd3LumXXJrpHuY76WDdjE9he0D7Ra6J95lnvbdmZe+CTw5Bfe2p4CrYeC/dpgtJ33ztGUXKH4Q=="
+      crossorigin="anonymous"
+    ></script>
+    <style>
+      body {
+        text-align: center;
+      }
+
+      .hide {
+        display: none;
+      }
+
+      .meter {
+        margin: 0;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        opacity: 0.7;
+        background: red;
+        transform: scale(0);
+      }
+
+      .tape {
+        /*border: 1px solid #999; */
+        padding-right: 60px;
+        margin: auto;
+      }
+      #stage {
+        position: relative;
+      }
+      #canvasContainer {
+        position: fixed;
+        top: 80px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+      }
+      canvas {
+        position: absolute;
+        left: 50%;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        transform: translateX(-50%);
+      }
+      #canvas2 {
+        opacity: 0.7;
+      }
+      button {
+        z-index: 1;
+        padding: 1rem;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="canvasContainer">
+      <canvas width="800" height="450" id="canvas"></canvas>
+      <canvas width="800" height="450" id="canvas2"></canvas>
+    </div>
+
+    <button id="go">initialise audio</button>
+    <div id="playPause" class="hide">
+      <button id="start">start</button> / 
+      <button id="pause">pause</button>
+    </div>
+
+    <script>
+      // create player instance
+      function createPlayer(sample, destination) {
+        const meter = new Tone.Waveform().connect(destination);
+        const player = new Tone.Player().connect(meter);
+        player.buffer = sample;
+        player.loop = true;
+        player.sync().start(0);
+        return {
+          player,
+          meter,
+        };
+      }
+      const limiter = new Tone.Limiter(-20).toDestination();
+      const canvas = document.getElementById("canvas");
+      var context = canvas.getContext("2d");
+      const canvas2 = document.getElementById("canvas2");
+      var context2 = canvas2.getContext("2d");
+      const colors = [
+        "#686802",
+        "green",
+        "blue",
+        "cyan",
+        "orange",
+        "violet",
+        "goldenrod",
+        "red",
+        "red",
+        "red",
+        "red",
+        "red",
+        "red",
+      ];
+
+      function circle(x, y, radius, index) {
+        context.beginPath();
+        context.arc(x, y, radius, 0, 2 * Math.PI, false);
+        if (radius > 1) {
+          context.fillStyle = ["green", "#00804b", "#006880", "blue"][
+            Math.floor(Math.random() * 4)
+          ];
+        } else {
+          context.fillStyle = ["#ccc", "#aaa", "#fff"][
+            Math.floor(Math.random() * 3)
+          ];
+        }
+        context.fill();
+        //context.filter = 'blur(1px)';
+        index === 0 && context2.clearRect(0, 0, canvas2.width, canvas2.height);
+
+        context2.beginPath();
+        context2.arc(x, y, radius > 3 ? radius * 3 : 3, 0, 2 * Math.PI, false);
+
+        context2.fillStyle = colors[index];
+        context2.fill();
+      }
+
+      let maxLength = 0;
+
+      var players = {
+        one: "samples/Eno-Piano-01.mp3",
+        two: "samples/Eno-Piano-02.mp3",
+        three: "samples/Eno-Piano-03.mp3",
+        four: "samples/Eno-Piano-04.mp3",
+        five: "samples/Eno-Piano-05.mp3",
+        six: "samples/Eno-Piano-06.mp3",
+        seven: "samples/Eno-Piano-07.mp3",
+        eight: "samples/Eno-Piano-08.mp3",
+        nine: "samples/Eno-Choir-01.mp3",
+        ten: "samples/Eno-Choir-02.mp3",
+        eleven: "samples/Eno-Choir-03.mp3",
+        twelve: "samples/Eno-Choir-04.mp3",
+      };
+      document.querySelector("#go")?.addEventListener("click", async () => {
+        await Tone.start();
+        var loopSamples = new Tone.Buffers(players, function () {
+          Object.keys(players).forEach((key) => {
+            players[key] = createPlayer(loopSamples.get(key), limiter);
+            if (players[key].player.buffer.duration > maxLength) {
+              maxLength = players[key].player.buffer.duration;
+            }
+          });
+          console.log(maxLength);
+        });
+        document.querySelector("#go").classList.add("hide");
+        document.querySelector("#playPause").classList.remove("hide");
+      });
+
+      document.querySelector("#start")?.addEventListener("click", function () {
+        Tone.Transport.start();
+      });
+      document.querySelector("#pause")?.addEventListener("click", function () {
+        Tone.Transport.pause();
+      });
+
+      function animateMeter(key, index) {
+        let meter = getAvWav(players[key]?.meter.getValue());
+        if (meter) {
+          let loopPos =
+            Tone.Transport.getSecondsAtTime() %
+            players[key].player.buffer.duration;
+          let offset = (maxLength - players[key].player.buffer.duration) / 2;
+          circle(
+            (loopPos + offset) * 20 + 20,
+            index * 30 + 20,
+            meter > 0.2 ? meter * 10 : 1,
+            index
+          );
+        }
+      }
+
+      let draw = () => {
+        window.requestAnimationFrame(draw);
+        let now = Tone.Transport.getSecondsAtTime();
+        if (typeof players["one"] !== "string") {
+          Object.keys(players).forEach((key, index) => {
+            animateMeter(key, index);
+          });
+        }
+      };
+
+      draw();
+
+      function getAvWav(arr) {
+        if (!arr) {
+          return 0;
+        }
+        //console.time('buffer');
+        let max = 0;
+        for (let i = 0; i < arr.length; i++) {
+          if (arr[i] > max) {
+            max = arr[i];
+          }
+        }
+        max = Math.floor(max * 1000);
+        if (max > 100) {
+          max = 100;
+        }
+        max = max / 100;
+        if (max < 0.2) {
+          max = 0.2;
+        }
+        //console.timeEnd('buffer');
+        return max;
+      }
+    </script>
+  </body>
+</html>
